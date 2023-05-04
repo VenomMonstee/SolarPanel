@@ -1,0 +1,104 @@
+const int analogInPin = A0;  // Analog input pin A0
+const int ldrPin = D2;  // Digital input pin D1
+int ldrValue = 0;
+String ldr = "";
+const int relay = D3;
+const int servo = D1;
+       #include <Servo.h>
+        Servo myservo;
+       #include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+        const char* ssid = "Shubhangi";
+const char* password = "123456789";
+      //Your Domain name with URL path or IP address with path
+      String serverName = "http://bubblecode.in/solar_cleaning/api.php";
+      // the following variables are unsigned longs because the time, measured in
+// milliseconds, will quickly become a bigger number than can be stored in an int.
+unsigned long lastTime = 0;
+// Timer set to 10 minutes (600000)
+//unsigned long timerDelay = 600000;
+// Set timer to 5 seconds (5000)
+unsigned long timerDelay = 5000;
+          void setup() {
+  Serial.begin(115200);     // Initialize serial communication
+  pinMode(ldrPin, INPUT);
+  pinMode(analogInPin,INPUT);
+  pinMode(relay,OUTPUT);
+  myservo.attach(servo);
+         WiFi.begin(ssid, password);
+  Serial.println("Connecting");
+  while(WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to WiFi network with IP Address: ");
+  Serial.println(WiFi.localIP());
+ 
+         Serial.println("Timer set to 5 seconds (timerDelay variable), it will take 5 seconds before publishing the first reading.");
+       }
+         void loop() {
+  int sensorValue = analogRead(analogInPin);  // Read the analog input
+  float voltage = sensorValue * (3.3 / 1023.0);  // Convert the ADC value to voltage (assuming a 3.3V reference voltage)
+  Serial.print("Voltage: ");
+  Serial.print(voltage, 2);  // Print the voltage with 2 decimal places
+  Serial.println(" V");
+  delay(1000);  // Wait for 1 second before reading again
+
+  ldrValue = digitalRead(ldrPin);  // Read the digital value of the input pin
+  if(ldrValue==0)
+  {
+    ldr = "day";    
+  }
+  else
+  {
+    ldr = "night";
+  }
+  Serial.println(ldr);
+  Serial.println(voltage);
+  delay(2000);
+         if ((millis() - lastTime) > timerDelay) {
+    //Check WiFi connection status
+    if(WiFi.status()== WL_CONNECTED){
+      WiFiClient client;
+      HTTPClient http;
+      String serverPath = serverName + "?volt="+voltage + "&ldr="+ldr;
+     // Your Domain name with URL path or IP address with path
+      http.begin(client, serverPath.c_str());
+      int httpResponseCode = http.GET();
+       if (httpResponseCode>0) 
+     {
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+        String payload = http.getString();
+        if(payload=="on")
+        {
+          WiFiClient client1;
+          HTTPClient http1;
+                  String serverPath1 = "http://bubblecode.in/solar_cleaning/api2.php" ;
+         // Your Domain name with URL path or IP address with path
+          http1.begin(client1, serverPath1.c_str());
+          int httpResponseCode1 = http1.GET();
+                   http1.end();
+          digitalWrite(relay,HIGH);          
+          myservo.write(0);   // move wiper to the bottom
+          delay(1000);        // wait for 1 second
+          myservo.write(90);  // move wiper to the middle
+          delay(1000);        // wait for 1 second
+          digitalWrite(relay,LOW);
+          }
+      }
+      else {
+        Serial.print("Error code: ");
+        Serial.println(httpResponseCode);
+      }
+      
+      http.end();
+    }
+    else {
+      Serial.println("WiFi Disconnected");
+    }
+    lastTime = millis();
+  }
+}
